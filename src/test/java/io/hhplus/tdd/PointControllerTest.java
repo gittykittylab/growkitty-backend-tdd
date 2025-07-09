@@ -4,6 +4,9 @@ package io.hhplus.tdd;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import io.hhplus.tdd.point.PointController;
+import io.hhplus.tdd.point.UserPoint;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class PointControllerTest {
     // 테스트 대상
@@ -16,6 +19,19 @@ public class PointControllerTest {
         userPointTable = new UserPointTable();
         pointHistoryTable = new PointHistoryTable();
         controller = new PointController(userPointTable, pointHistoryTable);
+    }
+
+    @Test
+    void returnCorrectUserPoint() { // 특정 유저의 포인트 조회
+        long userId = 1L;
+        long pointAmount = 100L;
+        // 포인트 삽입
+        userPointTable.insertOrUpdate(userId, pointAmount);
+        // 포인트 조회
+        UserPoint result = controller.point(userId);
+        // 검증
+        assertEquals(userId, result.id());
+        assertEquals(pointAmount, result.point());
     }
 
 }
