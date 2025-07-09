@@ -126,4 +126,52 @@ public class PointControllerTest {
         }
         assertTrue(chargeFound,"이력 사항이 1개 이상 필요합니다.");
     }
+
+    @Test
+    void returnCorrectUse() { // 특정 유저의 포인트 사용
+        long userId = 1L;
+        long usedAmount = 100L;
+        long originAmount = 500L;
+        long exceedAmount = 600L;
+        long updatedAmount = originAmount - usedAmount;
+        long negativeAmount = -1L;
+        long now = System.currentTimeMillis();
+
+        // 기존 포인트 삽입
+        userPointTable.insertOrUpdate(userId, originAmount);
+        // 포인트 사용
+        UserPoint result = controller.use(userId,usedAmount);
+
+        // 포인트 사용액이 음수인 경우의 테스트
+        IllegalArgumentException neException = assertThrows(
+                IllegalArgumentException.class,
+                ()-> controller.use(userId, negativeAmount));
+        assertEquals("0보다 큰 금액만 사용할 수 있습니다.", neException.getMessage());
+
+        // 포인트 사용 내역 테스트
+        assertEquals(userId, result.id());
+        assertEquals(updatedAmount, result.point());
+        assertTrue(result.updateMillis() >= now);
+
+        // 포인트 잔액 테스트
+        IllegalArgumentException balException = assertThrows(
+                IllegalArgumentException.class,
+                ()->controller.use(userId,exceedAmount));
+        assertEquals("잔액이 부족합니다.", balException.getMessage());
+
+        // 이력 테스트
+        boolean useFound = false;
+        List<PointHistory> history = controller.history(userId);
+        for (PointHistory h : history){
+            if (h.type() == TransactionType.USE){
+                useFound = true;
+                assertEquals(userId, h.userId());
+                assertEquals(usedAmount, h.amount());
+                assertEquals(TransactionType.USE, h.type());
+                assertTrue(h.updateMillis() >= now);
+            }
+        }
+        assertTrue(useFound,"이력 사항이 1개 이상 필요합니다.");
+
+    }
 }
