@@ -75,6 +75,20 @@ public class PointController {
             @PathVariable long id,
             @RequestBody long amount
     ) {
-        return new UserPoint(0, 0, 0);
+        //사용할 포인트가 음수로 입력되었을 때
+        if (amount <= 0) {
+            throw new IllegalArgumentException("0보다 큰 금액만 사용할 수 있습니다.");
+        }
+        UserPoint current = userPointTable.selectById(id);
+        // 잔액 부족 확인
+        if(current.point() < amount){
+            throw new IllegalArgumentException("잔액이 부족합니다.");
+        }
+        // 포인트 사용 시 이력
+        long now = System.currentTimeMillis();
+        pointHistoryTable.insert(id, amount, TransactionType.USE, now);
+
+        long updatedAmount = current.point() - amount;
+        return userPointTable.insertOrUpdate(id, updatedAmount);
     }
 }
