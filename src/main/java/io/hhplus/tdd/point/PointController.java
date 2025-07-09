@@ -1,5 +1,6 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,9 +14,11 @@ public class PointController {
 
     private static final Logger log = LoggerFactory.getLogger(PointController.class);
     private final UserPointTable userPointTable;
+    private final PointHistoryTable pointHistoryTable;
 
-    public PointController(UserPointTable userPointTable) {
+    public PointController(UserPointTable userPointTable, PointHistoryTable pointHistoryTable) {
         this.userPointTable = userPointTable;
+        this.pointHistoryTable = pointHistoryTable;
     }
 
     /**
@@ -35,7 +38,7 @@ public class PointController {
     public List<PointHistory> history(
             @PathVariable long id
     ) {
-        return List.of();
+        return pointHistoryTable.selectAllByUserId(id);
     }
 
     /**
