@@ -58,4 +58,24 @@ public class PointControllerTest {
             }
         }
     }
+
+    @Test
+    void returnCorrectUseHistory() { // 특정 유저의 포인트 사용 이력 조회
+        long userId = 1L;
+        long usedAmount = 100L;
+        long now = System.currentTimeMillis();
+
+        pointHistoryTable.insert(userId, usedAmount, TransactionType.USE, now);
+
+        List<PointHistory> result = controller.history(userId);
+
+        for (PointHistory h : result){
+            if (h.type() == TransactionType.USE){
+                assertEquals(userId, h.userId());
+                assertEquals(usedAmount, h.amount());
+                assertEquals(TransactionType.USE, h.type());
+                assertTrue(h.updateMillis() >= now);
+            }
+        }
+    }
 }
