@@ -4,8 +4,13 @@ package io.hhplus.tdd;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import io.hhplus.tdd.point.PointController;
+import io.hhplus.tdd.point.PointHistory;
+import io.hhplus.tdd.point.TransactionType;
 import io.hhplus.tdd.point.UserPoint;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class PointControllerTest {
@@ -34,4 +39,23 @@ public class PointControllerTest {
         assertEquals(pointAmount, result.point());
     }
 
+    @Test
+    void returnCorrectChargeHistory() { // 특정 유저의 포인트 충전 이력 조회
+        long userId = 1L;
+        long chargeAmount = 100L;
+        long now = System.currentTimeMillis();
+
+        pointHistoryTable.insert(userId, chargeAmount, TransactionType.CHARGE, now);
+
+        List<PointHistory> result = controller.history(userId);
+
+        for (PointHistory h : result){
+            if (h.type() == TransactionType.CHARGE){
+                assertEquals(userId, h.userId());
+                assertEquals(chargeAmount, h.amount());
+                assertEquals(TransactionType.CHARGE, h.type());
+                assertTrue(h.updateMillis() >= now);
+            }
+        }
+    }
 }
