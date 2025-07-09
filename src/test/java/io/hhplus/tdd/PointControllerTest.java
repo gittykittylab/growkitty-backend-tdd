@@ -10,6 +10,9 @@ import io.hhplus.tdd.point.UserPoint;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -174,4 +177,37 @@ public class PointControllerTest {
         assertTrue(useFound,"이력 사항이 1개 이상 필요합니다.");
 
     }
+
+    @Test
+    void synchronizedCharge() throws InterruptedException { //동시에 같은 유저에게 충전 여러번
+        int threadCount = 100; // 총 쓰레드 수 
+        long userId = 1L; // 같은 유저 아이디
+        long chargeAmount = 100L; // 같은 충전 금액
+        ExecutorService executor = Executors.newFixedThreadPool(10); // 쓰레드풀
+        CountDownLatch latch = new CountDownLatch(threadCount); // 대기
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    controller.charge(userId, chargeAmount);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await(); // 모든 작업 끝날 때까지 대기
+
+        UserPoint result = controller.point(userId);
+        long expected = threadCount * chargeAmount;
+        System.out.println("최종 포인트: " + result.point());
+
+        assertEquals(expected, result.point()); // 원래 10000 이 나아와야하는데 안 나옴 (여러 쓰레드가 동시에 같은 데이터를 수정)
+        // 한 번에 한 쓰레드만 접근 가능하게 막는 것 = "동기화"
+        // 비동기적 동작 코드를 동기화해서 동시성 문제를 막는다
+        // 현재 코드에서는 비동기적으로 실행되는 여러 쓰레드가
+        // 동일한 사용자 포인트를 동시에 읽고 수정
+        // 공유 자원에 대한 접근을 동기화해야 한다.
+    }
+
 }
