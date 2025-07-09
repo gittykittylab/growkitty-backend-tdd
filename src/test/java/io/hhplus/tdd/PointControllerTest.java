@@ -78,4 +78,52 @@ public class PointControllerTest {
             }
         }
     }
+
+    @Test
+    void returnCorrectCharge() { // 특정 유저의 포인트 충전
+        long userId = 1L;
+        long originAmount = 1000L;
+        long chargeAmount = 100L;
+        long exceedAmount = 60000L;
+        long maxPoint = 50000L;
+        long negativeAmount = -1L;
+        long updatedAmount = originAmount + chargeAmount;
+        long now = System.currentTimeMillis();
+
+        // 기존 포인트 삽입
+        userPointTable.insertOrUpdate(userId,originAmount);
+        // 포인트 충전
+        UserPoint result = controller.charge(userId, chargeAmount);
+
+        // 포인트 충전액이 음수인 경우의 테스트
+        IllegalArgumentException exception2 = assertThrows(
+                IllegalArgumentException.class,
+                ()-> controller.charge(userId,negativeAmount));
+        assertEquals("0보다 큰 금액만 충전할 수 있습니다.", exception2.getMessage());
+
+        // 충전 내역 테스트
+        assertEquals(userId, result.id());
+        assertEquals(updatedAmount, result.point());
+        assertTrue(result.updateMillis() >= now);
+
+        // 포인트 최대 금액 테스트
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> controller.charge(userId,exceedAmount));
+        assertEquals("최대 충전 금액은 " + maxPoint + "원 입니다.", exception.getMessage());
+
+        // 이력 테스트
+        List<PointHistory> histResult = controller.history(userId);
+        boolean chargeFound = false;
+        for (PointHistory h : histResult) {
+            if (h.type() == TransactionType.CHARGE && h.amount() == chargeAmount) {
+                chargeFound = true;
+                assertEquals(userId, h.userId());
+                assertEquals(chargeAmount, h.amount());
+                assertEquals(TransactionType.CHARGE, h.type());
+                assertTrue(h.updateMillis() >= now);
+            }
+        }
+        assertTrue(chargeFound,"이력 사항이 1개 이상 필요합니다.");
+    }
 }
