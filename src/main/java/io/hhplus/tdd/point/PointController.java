@@ -49,7 +49,22 @@ public class PointController {
             @PathVariable long id,
             @RequestBody long amount
     ) {
-        return new UserPoint(0, 0, 0);
+        //충전할 포인트가 음수로 입력되었을 때
+        if (amount <= 0) {
+            throw new IllegalArgumentException("0보다 큰 금액만 충전할 수 있습니다.");
+        }
+        UserPoint current = userPointTable.selectById(id);
+        long now = System.currentTimeMillis();
+        long maxPoint = 50000L;
+        long updatedAmount = current.point() + amount;
+        // 최대 충전 금액 제한
+        if(updatedAmount > maxPoint){
+            throw new IllegalArgumentException("최대 충전 금액은 " +maxPoint+ "원 입니다.");
+        }
+        // 포인트 충전 시 이력
+        pointHistoryTable.insert(id, amount, TransactionType.CHARGE, now);
+        // 업데이트된 유저 포인트 반환
+        return userPointTable.insertOrUpdate(id, updatedAmount);
     }
 
     /**
