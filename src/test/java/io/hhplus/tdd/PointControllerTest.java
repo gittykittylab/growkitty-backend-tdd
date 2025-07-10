@@ -178,6 +178,8 @@ public class PointControllerTest {
 
     }
 
+    // STEP 02
+
     @Test
     void synchronizedCharge() throws InterruptedException { //동시에 같은 유저에게 충전 여러번
         int threadCount = 100; // 총 쓰레드 수 
@@ -207,7 +209,7 @@ public class PointControllerTest {
         // 비동기적 동작 코드를 동기화해서 동시성 문제를 막는다
         // 현재 코드에서는 비동기적으로 실행되는 여러 쓰레드가
         // 동일한 사용자 포인트를 동시에 읽고 수정
-        // 공유 자원에 대한 접근을 동기화해야 한다.
+        // 공유 자원에 대한 접근을 동기화해야 한다. --> 락, 동기화
     }
 
 }
