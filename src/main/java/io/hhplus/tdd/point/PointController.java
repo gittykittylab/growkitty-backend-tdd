@@ -97,8 +97,18 @@ public class PointController {
             @PathVariable long id,
             @RequestBody long amount
     ) {
-        // 동시성 제어를 위한 lock(한 사용자의 id에 여러번 포인트 충전)
-        Object lock = userLocks.computeIfAbsent(id, k -> new Object());
+        // 동시성 제어를 위한 lock(한 사용자의 id에 여러번 포인트 사용)
+        // Collections.synchronizedMap 기본적인 연산 (get, put, remove 등) 에만 동기화 걸어줌
+        // computeIfAbsent는 단일 연산이 아니기에 멀티스레드 환경에서 weakHash가 영향 받을 가능성이 높음 --> 락을
+        // Object lock = userLocks.computeIfAbsent(id, k -> new Object());
+        Object lock;
+        synchronized (userLocks) { // 락이 없으면 생성 후 삽입
+            lock = userLocks.get(id);
+            if (lock == null) {
+                lock = new Object();
+                userLocks.put(id, lock);
+            }
+        }
         // 동기화 코드
         synchronized (lock){
             //사용할 포인트가 음수로 입력되었을 때
