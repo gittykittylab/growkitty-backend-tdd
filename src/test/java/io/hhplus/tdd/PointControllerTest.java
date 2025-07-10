@@ -8,6 +8,8 @@ import io.hhplus.tdd.point.PointHistory;
 import io.hhplus.tdd.point.TransactionType;
 import io.hhplus.tdd.point.UserPoint;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -17,6 +19,7 @@ import java.util.concurrent.Executors;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class PointControllerTest {
+    private static final Logger log = LoggerFactory.getLogger(PointControllerTest.class);
     // 테스트 대상
     private final PointController controller;
     // 의존성
@@ -212,4 +215,34 @@ public class PointControllerTest {
         // 공유 자원에 대한 접근을 동기화해야 한다. --> 락, 동기화
     }
 
+    @Test
+    void synchronizedUse() throws InterruptedException {
+        long userId = 1L;
+        long originAmount = 10000L;
+        long usedAmount = 100L;
+        int threadCnt = 100;
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        CountDownLatch latch = new CountDownLatch(threadCnt);
+        // 포인트 삽입
+        userPointTable.insertOrUpdate(userId, originAmount);
+        // 쓰레드 실행
+        for (int i=0;i<threadCnt;i++){
+            executor.submit(() ->{
+                try {
+                    controller.use(userId, usedAmount);
+                } catch (Exception e) {
+                    log.warn("사용중 오류 발생" , e);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        // 끝날 때까지 대기
+        latch.await();
+        // 포인트 조회
+        UserPoint result = controller.point(userId);
+        long expected = originAmount - (usedAmount * threadCnt);
+        // 결과 검증
+        assertEquals(expected, result.point());
+    }
 }
