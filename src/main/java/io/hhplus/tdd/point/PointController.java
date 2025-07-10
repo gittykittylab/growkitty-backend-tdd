@@ -6,15 +6,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/point")
 public class PointController {
-
     private static final Logger log = LoggerFactory.getLogger(PointController.class);
     private final UserPointTable userPointTable;
     private final PointHistoryTable pointHistoryTable;
+    // ConcurrentHashMap - 락을 보관할 공간, 여러 쓰레드가 동시에 접근해도 안전하게 동작 가능
+    // 사용자별 ID(Long)으로 Object(락객체) 저장
+    // private final ConcurrentHashMap<Long, Object> userLocks = new ConcurrentHashMap<>();
+    // 메모리 누수 방지를 위해 강한 참조의 ConcurrentHashMap 대신 WeakHashMap 사용
+    private final Map<Long, Object> userLocks = Collections.synchronizedMap(new WeakHashMap<>());
 
     public PointController(UserPointTable userPointTable, PointHistoryTable pointHistoryTable) {
         this.userPointTable = userPointTable;
@@ -49,22 +57,36 @@ public class PointController {
             @PathVariable long id,
             @RequestBody long amount
     ) {
-        //충전할 포인트가 음수로 입력되었을 때
-        if (amount <= 0) {
-            throw new IllegalArgumentException("0보다 큰 금액만 충전할 수 있습니다.");
+        // 동시성 제어를 위한 lock(한 사용자의 id에 여러번 포인트 충전)
+        // Collections.synchronizedMap 기본적인 연산 (get, put, remove 등) 에만 동기화 걸어줌
+        // computeIfAbsent는 단일 연산이 아니기에 멀티스레드 환경에서 weakHash가 영향 받을 가능성이 높음 --> 락을
+        // Object lock = userLocks.computeIfAbsent(id, k -> new Object());
+        Object lock;
+        synchronized (userLocks) { // 락이 없으면 생성 후 삽입
+            lock = userLocks.get(id);
+            if (lock == null) {
+                lock = new Object();
+                userLocks.put(id, lock);
+            }
         }
-        UserPoint current = userPointTable.selectById(id);
-        long now = System.currentTimeMillis();
-        long maxPoint = 50000L;
-        long updatedAmount = current.point() + amount;
-        // 최대 충전 금액 제한
-        if(updatedAmount > maxPoint){
-            throw new IllegalArgumentException("최대 충전 금액은 " +maxPoint+ "원 입니다.");
+        // 동기화 코드
+        synchronized (lock) { // 사용자별 포인트 충전 처리
+            if (amount <= 0) {  //충전할 포인트가 음수로 입력되었을 때
+                throw new IllegalArgumentException("0보다 큰 금액만 충전할 수 있습니다.");
+            }
+            UserPoint current = userPointTable.selectById(id);
+            long now = System.currentTimeMillis();
+            long maxPoint = 50000L;
+            long updatedAmount = current.point() + amount;
+            // 최대 충전 금액 제한
+            if(updatedAmount > maxPoint){
+                throw new IllegalArgumentException("최대 충전 금액은 " +maxPoint+ "원 입니다.");
+            }
+            // 포인트 충전 시 이력
+            pointHistoryTable.insert(id, amount, TransactionType.CHARGE, now);
+            // 업데이트된 유저 포인트 반환
+            return userPointTable.insertOrUpdate(id, updatedAmount);
         }
-        // 포인트 충전 시 이력
-        pointHistoryTable.insert(id, amount, TransactionType.CHARGE, now);
-        // 업데이트된 유저 포인트 반환
-        return userPointTable.insertOrUpdate(id, updatedAmount);
     }
 
     /**
@@ -75,20 +97,35 @@ public class PointController {
             @PathVariable long id,
             @RequestBody long amount
     ) {
-        //사용할 포인트가 음수로 입력되었을 때
-        if (amount <= 0) {
-            throw new IllegalArgumentException("0보다 큰 금액만 사용할 수 있습니다.");
+        // 동시성 제어를 위한 lock(한 사용자의 id에 여러번 포인트 사용)
+        // Collections.synchronizedMap 기본적인 연산 (get, put, remove 등) 에만 동기화 걸어줌
+        // computeIfAbsent는 단일 연산이 아니기에 멀티스레드 환경에서 weakHash가 영향 받을 가능성이 높음 --> 락을
+        // Object lock = userLocks.computeIfAbsent(id, k -> new Object());
+        Object lock;
+        synchronized (userLocks) { // 락이 없으면 생성 후 삽입
+            lock = userLocks.get(id);
+            if (lock == null) {
+                lock = new Object();
+                userLocks.put(id, lock);
+            }
         }
-        UserPoint current = userPointTable.selectById(id);
-        // 잔액 부족 확인
-        if(current.point() < amount){
-            throw new IllegalArgumentException("잔액이 부족합니다.");
-        }
-        // 포인트 사용 시 이력
-        long now = System.currentTimeMillis();
-        pointHistoryTable.insert(id, amount, TransactionType.USE, now);
+        // 동기화 코드
+        synchronized (lock){
+            //사용할 포인트가 음수로 입력되었을 때
+            if (amount <= 0) {
+                throw new IllegalArgumentException("0보다 큰 금액만 사용할 수 있습니다.");
+            }
+            UserPoint current = userPointTable.selectById(id);
+            // 잔액 부족 확인
+            if(current.point() < amount){
+                throw new IllegalArgumentException("잔액이 부족합니다.");
+            }
+            // 포인트 사용 시 이력
+            long now = System.currentTimeMillis();
+            pointHistoryTable.insert(id, amount, TransactionType.USE, now);
 
-        long updatedAmount = current.point() - amount;
-        return userPointTable.insertOrUpdate(id, updatedAmount);
+            long updatedAmount = current.point() - amount;
+            return userPointTable.insertOrUpdate(id, updatedAmount);
+        }
     }
 }
